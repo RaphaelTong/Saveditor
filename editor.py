@@ -53,6 +53,32 @@ def find_buildings_path(json_obj, path=""):
     return None, None
 
 
+def find_inventory_path(json_obj, path=""):
+    """Find the path to inventory in the JSON structure."""
+    if isinstance(json_obj, dict):
+        if "inventory" in json_obj and isinstance(json_obj["inventory"], list):
+            return path, json_obj
+        for key, value in json_obj.items():
+            if isinstance(value, dict):
+                result = find_inventory_path(value, f"{path}.{key}" if path else key)
+                if result[0] is not None:
+                    return result
+    return None, None
+
+
+def find_equipment_path(json_obj, path=""):
+    """Find the path to equipment in the JSON structure."""
+    if isinstance(json_obj, dict):
+        if "equipment" in json_obj and isinstance(json_obj["equipment"], dict):
+            return path, json_obj
+        for key, value in json_obj.items():
+            if isinstance(value, dict):
+                result = find_equipment_path(value, f"{path}.{key}" if path else key)
+                if result[0] is not None:
+                    return result
+    return None, None
+
+
 def edit_resources(save_json):
     """Edit resource values in the save file."""
     st.header("Resources Editor")
@@ -174,6 +200,156 @@ def edit_buildings(save_json):
     return save_json
 
 
+def edit_inventory(save_json):
+    """Edit inventory item amounts and qualities."""
+    st.header("Inventory Editor")
+    
+    # Find the inventory in the JSON structure
+    inventory_path, container = find_inventory_path(save_json)
+    
+    if not container or "inventory" not in container:
+        st.error("No inventory found in the save file!")
+        return save_json
+    
+    inventory = container.get("inventory", [])
+    modified = False
+    
+    # Group items by ID for more organized display
+    # This helps when the same item appears multiple times with different qualities
+    item_groups = {}
+    
+    for idx, item in enumerate(inventory):
+        if "itemOccurrence" in item and "itemId" in item["itemOccurrence"]:
+            item_id = item["itemOccurrence"]["itemId"]
+            quality = item["itemOccurrence"].get("params", {}).get("itemQuality", 0)
+            
+            # Create a unique key for this item+quality combination
+            group_key = f"{item_id}_{quality}"
+            
+            if group_key not in item_groups:
+                item_groups[group_key] = {
+                    "name": item_id,
+                    "quality": quality,
+                    "items": []
+                }
+            
+            item_groups[group_key]["items"].append((idx, item))
+    
+    # Create a search box for filtering items
+    search_term = st.text_input("Search items", "")
+    
+    # Filter items based on search term if provided
+    if search_term:
+        filtered_groups = {k: v for k, v in item_groups.items() if search_term.lower() in v["name"].lower()}
+        if not filtered_groups:
+            st.warning(f"No items found matching '{search_term}'")
+            filtered_groups = item_groups
+    else:
+        filtered_groups = item_groups
+    
+    # Display items in expandable sections grouped by name
+    for group_key, group_data in filtered_groups.items():
+        item_name = group_data["name"]
+        quality = group_data["quality"]
+        items = group_data["items"]
+        
+        # Create an expander for each item type
+        quality_text = f" (Quality: {quality})" if quality else ""
+        with st.expander(f"{item_name}{quality_text} - {len(items)} item(s)"):
+            for idx, (item_idx, item) in enumerate(items):
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.write(f"Item ID: {item_name}")
+                    if quality:
+                        st.write(f"Quality: {quality}")
+                
+                with col2:
+                    # Edit amount
+                    new_amount = st.number_input(
+                        "Amount",
+                        value=int(item.get("amount", 1)),
+                        min_value=1,
+                        step=1,
+                        key=f"inventory_amount_{item_idx}"
+                    )
+                    
+                    # Edit quality if params exist
+                    if "params" in item["itemOccurrence"] and "itemQuality" in item["itemOccurrence"]["params"]:
+                        new_quality = st.number_input(
+                            "Quality",
+                            value=int(item["itemOccurrence"]["params"].get("itemQuality", 1)),
+                            min_value=1,
+                            step=1,
+                            key=f"inventory_quality_{item_idx}"
+                        )
+                        
+                        # Check if quality changed
+                        if new_quality != item["itemOccurrence"]["params"].get("itemQuality", 1):
+                            item["itemOccurrence"]["params"]["itemQuality"] = new_quality
+                            modified = True
+                    
+                    # Check if amount changed
+                    if new_amount != item.get("amount", 1):
+                        item["amount"] = new_amount
+                        modified = True
+    
+    # Update the save_json with the modified inventory
+    if modified:
+        # No need to reassign as we modified the items in place
+        pass
+    
+    return save_json
+
+
+def edit_equipment(save_json):
+    """Edit equipped items."""
+    st.header("Equipment Editor")
+    
+    # Find the equipment in the JSON structure
+    equipment_path, container = find_equipment_path(save_json)
+    
+    if not container or "equipment" not in container:
+        st.error("No equipment found in the save file!")
+        return save_json
+    
+    equipment = container.get("equipment", {})
+    modified = False
+    
+    # Create tabs for each equipment slot
+    slot_tabs = st.tabs(list(equipment.keys()))
+    
+    for i, slot_name in enumerate(equipment.keys()):
+        with slot_tabs[i]:
+            st.subheader(f"{slot_name} Slot")
+            
+            slot_items = equipment[slot_name]
+            
+            # Display each equipped item
+            for idx, item in enumerate(slot_items):
+                with st.expander(f"Item {idx+1}: {item.get('itemId', 'Unknown')}"):
+                    st.write(f"Item ID: {item.get('itemId', 'Unknown')}")
+                    
+                    # Edit quality if it exists
+                    if "params" in item and "itemQuality" in item["params"]:
+                        new_quality = st.number_input(
+                            "Quality",
+                            value=int(item["params"].get("itemQuality", 1)),
+                            min_value=1,
+                            step=1,
+                            key=f"equipment_{slot_name}_{idx}_quality"
+                        )
+                        
+                        # Check if quality changed
+                        if new_quality != item["params"].get("itemQuality", 1):
+                            item["params"]["itemQuality"] = new_quality
+                            modified = True
+    
+    # No need to reassign equipment as we modified it in place
+    
+    return save_json
+
+
 def view_raw_json(save_json):
     """View and edit the raw JSON of the save file."""
     st.header("Raw JSON Editor")
@@ -204,7 +380,7 @@ if uploaded_file is not None:
     st.expander("Debug: Save File Structure").json({k: type(v).__name__ for k, v in save_json.items()})
     
     # Create tabs for different editing sections
-    tab1, tab2, tab3 = st.tabs(["Resources", "Buildings", "Raw JSON"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Resources", "Buildings", "Inventory", "Equipment", "Raw JSON"])
     
     with tab1:
         save_json = edit_resources(save_json)
@@ -213,6 +389,12 @@ if uploaded_file is not None:
         save_json = edit_buildings(save_json)
     
     with tab3:
+        save_json = edit_inventory(save_json)
+    
+    with tab4:
+        save_json = edit_equipment(save_json)
+    
+    with tab5:
         save_json = view_raw_json(save_json)
     
     if st.button("Save Changes"):
