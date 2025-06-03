@@ -213,12 +213,15 @@ def edit_inventory(save_json):
     
     inventory = container.get("inventory", [])
     modified = False
-    
-    # Group items by ID for more organized display
+      # Group items by ID for more organized display
     # This helps when the same item appears multiple times with different qualities
     item_groups = {}
     
     for idx, item in enumerate(inventory):
+        # Skip invalid items
+        if not item or not isinstance(item, dict) or "itemOccurrence" not in item:
+            continue
+            
         if "itemOccurrence" in item and "itemId" in item["itemOccurrence"]:
             item_id = item["itemOccurrence"]["itemId"]
             quality = item["itemOccurrence"].get("params", {}).get("itemQuality", 0)
@@ -333,8 +336,7 @@ def edit_equipment(save_json):
     
     equipment = container.get("equipment", {})
     modified = False
-    
-    # Create tabs for each equipment slot
+      # Create tabs for each equipment slot
     slot_tabs = st.tabs(list(equipment.keys()))
     
     for i, slot_name in enumerate(equipment.keys()):
@@ -344,12 +346,20 @@ def edit_equipment(save_json):
             slot_items = equipment[slot_name]
             
             # Display each equipped item
-            for idx, item in enumerate(slot_items):                
-                with st.expander(f"Item {idx+1}: {item.get('itemId', 'Unknown')}"):
-                    st.write(f"Item ID: {item.get('itemId', 'Unknown')}")                      # Check if params exists - if not, initialize it
+            for idx, item in enumerate(slot_items):
+                # Skip if item is None
+                if item is None:
+                    st.warning(f"Item {idx+1} in {slot_name} slot is invalid (None)")
+                    continue
+                
+                # Get item ID safely
+                item_id = item.get('itemId', 'Unknown')
+                with st.expander(f"Item {idx+1}: {item_id}"):
+                    st.write(f"Item ID: {item_id}")                    # Check if params exists - if not, initialize it
                     if "params" not in item:
                         item["params"] = {}
-                          # If quality doesn't exist in the params and we haven't just added it, show Add Quality button
+                        
+                    # If quality doesn't exist in the params and we haven't just added it, show Add Quality button
                     if "itemQuality" not in item["params"] and not st.session_state.get(f"equip_has_quality_{slot_name}_{idx}", False):
                         if st.button(f"Add Quality", key=f"equip_add_quality_{slot_name}_{idx}"):
                             item["params"]["itemQuality"] = 1
