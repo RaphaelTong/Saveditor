@@ -263,7 +263,6 @@ def edit_inventory(save_json):
                     st.write(f"Item ID: {item_name}")
                     if quality:
                         st.write(f"Quality: {quality}")
-                
                 with col2:
                     # Edit amount
                     new_amount = st.number_input(
@@ -272,20 +271,39 @@ def edit_inventory(save_json):
                         min_value=1,
                         step=1,
                         key=f"inventory_amount_{item_idx}"
-                    )
+                    )                    # Check if params exists - if not, initialize it
+                    if "params" not in item["itemOccurrence"]:
+                        item["itemOccurrence"]["params"] = {}
+                      # If quality doesn't exist in the params and we haven't just added it, show Add Quality button
+                    if "itemQuality" not in item["itemOccurrence"]["params"] and not st.session_state.get(f"item_has_quality_{item_idx}", False):
+                        if st.button(f"Add Quality", key=f"add_quality_{item_idx}"):
+                            item["itemOccurrence"]["params"]["itemQuality"] = 1
+                            modified = True
+                            st.session_state[f"item_has_quality_{item_idx}"] = True
+                            st.success("Quality added!")
+                        
+                    # Show quality input if it exists OR if we just added it (via session state)
+                    has_quality = "itemQuality" in item["itemOccurrence"]["params"] or st.session_state.get(f"item_has_quality_{item_idx}", False)
                     
-                    # Edit quality if params exist
-                    if "params" in item["itemOccurrence"] and "itemQuality" in item["itemOccurrence"]["params"]:
+                    if has_quality:
+                        # Get value, ensuring it's at least 1 if it exists
+                        quality_value = max(1, item["itemOccurrence"]["params"].get("itemQuality", 1))
+                        
+                        # Show the quality input
                         new_quality = st.number_input(
                             "Quality",
-                            value=int(item["itemOccurrence"]["params"].get("itemQuality", 1)),
+                            value=quality_value,
                             min_value=1,
                             step=1,
                             key=f"inventory_quality_{item_idx}"
                         )
                         
+                        # Ensure the param exists
+                        if "itemQuality" not in item["itemOccurrence"]["params"]:
+                            item["itemOccurrence"]["params"]["itemQuality"] = new_quality
+                            modified = True
                         # Check if quality changed
-                        if new_quality != item["itemOccurrence"]["params"].get("itemQuality", 1):
+                        elif new_quality != item["itemOccurrence"]["params"].get("itemQuality"):
                             item["itemOccurrence"]["params"]["itemQuality"] = new_quality
                             modified = True
                     
@@ -326,22 +344,41 @@ def edit_equipment(save_json):
             slot_items = equipment[slot_name]
             
             # Display each equipped item
-            for idx, item in enumerate(slot_items):
+            for idx, item in enumerate(slot_items):                
                 with st.expander(f"Item {idx+1}: {item.get('itemId', 'Unknown')}"):
-                    st.write(f"Item ID: {item.get('itemId', 'Unknown')}")
+                    st.write(f"Item ID: {item.get('itemId', 'Unknown')}")                      # Check if params exists - if not, initialize it
+                    if "params" not in item:
+                        item["params"] = {}
+                          # If quality doesn't exist in the params and we haven't just added it, show Add Quality button
+                    if "itemQuality" not in item["params"] and not st.session_state.get(f"equip_has_quality_{slot_name}_{idx}", False):
+                        if st.button(f"Add Quality", key=f"equip_add_quality_{slot_name}_{idx}"):
+                            item["params"]["itemQuality"] = 1
+                            modified = True
+                            st.session_state[f"equip_has_quality_{slot_name}_{idx}"] = True
+                            st.success("Quality added!")
                     
-                    # Edit quality if it exists
-                    if "params" in item and "itemQuality" in item["params"]:
+                    # Show quality input if it exists OR if we just added it (via session state)
+                    has_quality = "itemQuality" in item["params"] or st.session_state.get(f"equip_has_quality_{slot_name}_{idx}", False)
+                    
+                    if has_quality:
+                        # Get value, ensuring it's at least 1 if it exists
+                        quality_value = max(1, item["params"].get("itemQuality", 1))
+                        
+                        # Show the quality input
                         new_quality = st.number_input(
                             "Quality",
-                            value=int(item["params"].get("itemQuality", 1)),
+                            value=quality_value,
                             min_value=1,
                             step=1,
                             key=f"equipment_{slot_name}_{idx}_quality"
                         )
                         
+                        # Ensure the param exists
+                        if "itemQuality" not in item["params"]:
+                            item["params"]["itemQuality"] = new_quality
+                            modified = True
                         # Check if quality changed
-                        if new_quality != item["params"].get("itemQuality", 1):
+                        elif new_quality != item["params"].get("itemQuality"):
                             item["params"]["itemQuality"] = new_quality
                             modified = True
     
